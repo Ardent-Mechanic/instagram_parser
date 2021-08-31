@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from selenium import webdriver
 import pickle
 
@@ -5,8 +7,8 @@ import pickle
 def get_cookies():
     driver = webdriver.Chrome()
     driver.get("https://www.instagram.com/")
-    answ = input("Если вы авторизировались напишите Y: ")
+    answ = input("If you are logged in write: Y")
     while answ != "Y":
-        answ = input("Для продолжения введите Y: ")
+        answ = input("To continue, enter: Y")
     pickle.dump(driver.get_cookies(), open("cookies", "wb"))
     driver.close()
