@@ -1,23 +1,23 @@
+   # -*- coding: utf-8 -*-
+
 import pickle
 import selenium.webdriver
 import time
 from random import triangular
 import os
 from urllib.request import urlretrieve
-from os.path import isfile
+from os.path import isfile, isdir
 from main import get_cookies
+import shutil
 
 
 class IntstParser:
-    def __init__(self):
+    def __init__(self, work_dir, txt_link, sumbol_count):
+        self.work_dir = work_dir
         self.driver = selenium.webdriver.Chrome()
         self.cookies = pickle.load(open("cookies", "rb"))
-        self.txt_link = input("Укажите путь до txt файла: ")
-        while not isfile(self.txt_link):
-            self.txt_link = input("Укажите правильный путь: ")
-        else:
-            print("Файл найден")
-        self.sumbol_count = int(input("Укажите минимальное количество символов в посте: "))
+        self.txt_link = txt_link
+        self.sumbol_count = sumbol_count
 
     def start(self):
         self.driver.get("https://www.instagram.com/")
@@ -42,7 +42,7 @@ class IntstParser:
 
         urlretrieve(img, f"{folder_link}/pic.png")
 
-    def get_post_link(self, url):
+    def get_post_link(self, url, work_dir):
         data = []
         cheker = count = 0
 
@@ -63,16 +63,25 @@ class IntstParser:
                 count = 1
             self.driver.execute_script(f"window.scrollTo(0, {height})")
 
-            height += triangular(600, 800)
+            height += triangular(500, 800)
 
-            time.sleep(triangular(0.0, 1.0))
+            time.sleep(triangular(1.0, 3.0))
 
             cheker = len(data)
+            print(cheker)
 
-        return data
+        with open(f"{work_dir}/posts_link.txt", mode="w", encoding="utf8") as text:
+            for post in data:
+                text.write(post + "\n")
+
+        print(len(data))
+
+        with open(f"{work_dir}/posts_num.txt", mode="w", encoding="utf8") as text:
+            text.write(f"1/{len(data)}")
 
     def chek_posts(self, post_link, post_author):
         self.driver.get(post_link)
+        time.sleep(triangular(1.0, 3.0))
         try:
             data = self.driver.find_element_by_class_name("C4VMK").find_elements_by_tag_name("span")
             author = data[0].text
@@ -82,24 +91,42 @@ class IntstParser:
                 info = ""
         except IndexError:
             info = ""
+        except Exception as ex:
+            print(f"Found Exception: {ex}")
+            info = ""
+            self.driver.close()
         return info
 
     def profile_create_folders(self, prfl_name):
-        try:
-            os.mkdir(prfl_name)
-            url = f"https://www.instagram.com/{prfl_name}"
-            posts_data = self.get_post_link(url)
-            count = 1
-            for post_url in posts_data:
-                info = self.chek_posts(post_url, prfl_name)
-                if len(info) >= self.sumbol_count:
-                    link = f"{prfl_name}/{count}"
-                    os.mkdir(path=link)
-                    self.save_data(info, link)
-                    count += 1
+        dir_for_prof = f"{self.work_dir}/{prfl_name}"
 
-        except FileExistsError:
-            print("Данная папка уже существует")
+        if isdir(dir_for_prof):
+            print("The directory exists, do you want to continue working?")
+            answ = input("Write Y: ")
+            while answ != "Y":
+                answ = input("Write Y: ")
+        else:
+            os.mkdir(dir_for_prof)
+            url = f"https://www.instagram.com/{prfl_name}"
+            self.get_post_link(url, dir_for_prof)
+
+        with open(f"{dir_for_prof}/posts_link.txt", mode="r", encoding="utf8") as posts_data:
+            with open(f"{dir_for_prof}/posts_num.txt", mode="r", encoding="utf8") as posts_num:
+                num = int(posts_num.read().split("/")[0])
+                count = num
+                if isdir(f"{dir_for_prof}/{num}"):
+                    shutil.rmtree(f"{dir_for_prof}/{num}")
+                for post_url in posts_data.readlines()[num - 1 if num - 1 >= 0 else 0:]:
+                    info = self.chek_posts(post_url.strip(), prfl_name)
+                    with open(f"{dir_for_prof}/posts_num.txt", mode="r", encoding="utf8") as text:
+                        nums = text.read().split("/")
+                    with open(f"{dir_for_prof}/posts_num.txt", mode="w", encoding="utf8") as text:
+                        text.write(f"{count}/{nums[1]}")
+                    if len(info) >= self.sumbol_count:
+                        link = f"{self.work_dir}/{prfl_name}/{count}"
+                        os.mkdir(path=link)
+                        self.save_data(info, link)
+                        count += 1
 
     def profile_find(self):
         with open(self.txt_link, mode="r", encoding="utf8") as data:
@@ -108,11 +135,35 @@ class IntstParser:
 
 
 if __name__ == "__main__":
-    get_cookies()
-    st = IntstParser()
+    print("Provide the directory for the parser to work: ")
+    work_folder = input().replace("\\", "/")
+
+    while not isdir(work_folder):
+        work_folder = input("Provide the true path!").replace("\\", "/")
+    else:
+        print("Directory selected")
+
+    file_link = input("Provide the path to the .txt file: ").replace("\\", "/")
+    while not isfile(file_link):
+        file_link = input("Provide the correct path: ").replace("\\", "/")
+    else:
+        print("File found")
+
+    while True:
+        try:
+            number = int(input("Specify the minimum number of characters in a post:"))
+            break
+        except TypeError:
+            pass
+
+    if not isfile("cookies"):
+        get_cookies()
+
+    st = IntstParser(work_folder, file_link, number)
     try:
         st.start()
         st.driver.close()
+        print("The work has been completed.")
     except Exception as ex:
         print(ex)
         st.driver.close()
